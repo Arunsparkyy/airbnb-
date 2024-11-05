@@ -1,0 +1,260 @@
+# %%
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+%matplotlib inline
+import seaborn as sns
+
+# %%
+airbnb=pd.read_csv(r"C:\Users\nanda\Downloads\images-20240812T162628Z-001\Airbnb NYC 2019.csv")
+#examing head of Airbnb csv file 
+airbnb.head(3)
+
+# %%
+airbnb.shape
+
+# %%
+airbnb.dtypes
+
+# %% [markdown]
+# 16 columns 
+
+# %% [markdown]
+# ### Data Cleaning
+# 
+# 
+
+# %%
+airbnb.isnull().sum()
+
+# %%
+airbnb.head(3)
+
+# %%
+airbnb.fillna({'reviews_per_month':0}, inplace=True)
+airbnb.isnull().sum()
+
+# %% [markdown]
+# ### Exploring and Visualizing Data
+# 
+# 
+
+# %%
+# Assign the splits to train_df and test_df
+from sklearn.model_selection import train_test_split
+
+# Split the dataset into 80% train and 20% test 
+train_df, test_df = train_test_split(airbnb, test_size = 0.2, train_size = 0.8, random_state = 123)
+
+# %%
+train_df.describe()
+
+# %%
+train_df.describe(include=['O'])
+
+# %%
+train_df.neighbourhood_group.value_counts()
+
+# %%
+train_df.neighbourhood.value_counts()[:5]
+
+# %%
+train_df.room_type.value_counts()
+
+# %%
+# Selecting only numeric columns for correlation
+numeric_cols = train_df.select_dtypes(include=['number'])
+corr = numeric_cols.corr()
+
+# Now plot the correlation matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(10, 10))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.show()
+
+
+# %%
+# plot the distribution of Airbnbs by neighbourhood group, specific neighbourhood & room_type
+f,(ax1, ax2, ax3) = plt.subplots(1,3, figsize=(25,6))
+
+ax1 = sns.countplot(train_df.neighbourhood_group, ax=ax1, palette = "coolwarm")
+ax2 = sns.countplot(train_df.neighbourhood, ax=ax2, palette = "coolwarm", order = train_df.neighbourhood.value_counts().iloc[:10].index)
+ax3 = sns.countplot(train_df.room_type, ax=ax3, palette = "coolwarm")
+
+ax2.set_xticklabels(ax2.get_xticklabels(), rotation=45, ha="right")
+
+plt.show()
+
+
+# %%
+cheap_bnb =train_df[train_df.price < 500]
+# use a violinplot to plot dist and density
+plt.figure(figsize=(15,8))
+cbnb =sns.violinplot(data=cheap_bnb, x='neighbourhood_group', y='price', palette = 'mako')
+cbnb.set_title('Density and distribution of prices across Neighbourhood Groups',size=10)
+
+# %%
+plt.figure(figsize=(16,6))
+avail = sns.boxplot(data=train_df, x='neighbourhood_group',y='availability_365',palette='coolwarm')
+plt.title("Room availability across Neighbourhood Groups",size=10)
+
+# %%
+f,(ax4, ax5) = plt.subplots(1,2, figsize=(20,6))
+
+# plot the distribution of Airbnbs by neighbourhood group, neighbourhood & room_type
+ax4 = sns.distplot(train_df.reviews_per_month, ax=ax4)
+ax5 = sns.distplot(train_df.number_of_reviews, ax=ax5)
+
+# show the plots
+plt.show()
+
+# %% [markdown]
+# It appears that for the majority of listings across all neighbourhood groups, 1 - 2 reviews are left per month. Also ~ 0 - 20 reviews are left for Airbnb's on average as per the left plot. 
+
+# %%
+# to sense check the above, plot the minimum nights stay 
+plt.figure(figsize=(15,8))
+sns.distplot(train_df[(train_df['minimum_nights'] <= 30)]['minimum_nights'], bins=31)
+plt.ioff()
+plt.title("Mininmum night stays in AirBnbs")
+
+# %% [markdown]
+# The largest proportion of required minimum stays is 1 night.
+# The minimum night stays are skewed to the left, with 1 - 8 nights representing the majority of all listings. 
+
+# %%
+# plot the distribution of neighbourhoods, room_type,  price level and availability
+plt.figure(figsize = (15, 15))
+
+
+train_df['price level'] = pd.cut(train_df["price"], [0, 100, 200, 12000], labels=["≤ 100", "100 - 200", "200+"])
+train_df['availability'] = pd.cut(train_df["availability_365"], [0, 90, 180, 270, 365], labels=["≤ 90", "90 - 180", "180-270", "270+"])
+
+# create 2x2 subplots showing the distribution of neighbourhoods, room_type,  price level and availability
+plt.subplot(221)
+sns.scatterplot(x="latitude", y="longitude",hue="neighbourhood_group", data=train_df)
+plt.subplot(222)
+sns.scatterplot(x="latitude", y="longitude",hue="room_type", data=train_df)
+plt.subplot(223)
+sns.scatterplot(x="latitude", y="longitude",hue="price level", data=train_df)
+plt.subplot(224)
+sns.scatterplot(x="latitude", y="longitude",hue="availability", data=train_df)
+
+# %%
+# drop the previously created columns required for visualisation
+train_df = train_df.drop(['price level'] , axis = 1)
+train_df = train_df.drop(['availability'] , axis = 1)
+
+# %%
+# check the dataframe is in order
+train_df.head()
+
+# %% [markdown]
+# ### Modeling
+# 
+# 
+# 
+
+# %%
+df = airbnb.drop(['name','host_id'], axis=1)
+df.head()
+
+# %%
+df.isnull().sum()
+
+# %%
+# check for null values
+train_df.isnull().sum()
+
+# %%
+categorical_features = df.select_dtypes(include=['object'])
+print('Categorical features: {}'.format(categorical_features.shape))
+
+categorical_features_one_hot = pd.get_dummies(categorical_features)
+categorical_features_one_hot.head()
+
+numerical_features =  df.select_dtypes(exclude=['object'])
+numerical_features = numerical_features.drop(['price'], axis=1)
+
+X = pd.concat([numerical_features, categorical_features_one_hot], axis=1)
+
+# %%
+from sklearn.compose import ColumnTransformer
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+#X = df.drop(columns=["price"])
+y = df["price"]
+
+from sklearn.model_selection import train_test_split
+# Split the dataset into 80% train and 20% test 
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
+X_train.head()
+
+# %%
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import Ridge
+from sklearn.tree import DecisionTreeRegressor
+
+
+#Prepairng a Decision Tree Regression
+from sklearn.tree import DecisionTreeRegressor
+
+tree=DecisionTreeRegressor()
+tree.fit(X_train,y_train)
+
+y_predict=tree.predict(X_test)
+from sklearn.metrics import r2_score
+r2_score(y_test,y_predict)
+
+# %%
+result = pd.DataFrame({'Actual': y_test, 
+                   'Predicted': y_predict})
+result.head(30)
+
+# %%
+from sklearn import metrics
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+from math import sqrt
+from sklearn.metrics import r2_score
+
+print('MAE: %f'% mean_absolute_error(y_test, y_predict))
+print('RMSE: %f'% np.sqrt(mean_squared_error(y_test, y_predict)))   
+print('R2 %f' % r2_score(y_test, y_predict))
+
+# %%
+#Linear Regression
+
+
+from sklearn.linear_model import LinearRegression
+reg = LinearRegression()
+reg.fit(X_train,y_train)
+reg.score(X_train, y_train)  
+
+# %%
+# perform a robust scaler transform of the dataset
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+reg = LinearRegression()
+imputer = SimpleImputer(strategy="median")
+imputer.fit(X_train);
+X_train_imp = imputer.transform(X_train)
+X_test_imp = imputer.transform(X_test)
+X_train_imp
+X_train_imp_df = pd.DataFrame(X_train_imp, columns = X_train.columns, index = X_train.index)
+X_train_imp_df.head()
+scaler = StandardScaler()
+X_train_scaled_std = scaler.fit_transform(X_train_imp)
+X_test_scaled_std = scaler.transform(X_test_imp)
+pd.DataFrame(X_train_scaled_std, columns=X_train.columns, index=X_train.index)
+#USe a Linear Regression Model to fit the training data
+reg.fit(X_train_scaled_std,y_train)
+reg.score(X_train_scaled_std, y_train)  
+
+
